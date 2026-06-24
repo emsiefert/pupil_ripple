@@ -13,6 +13,6 @@ This piece of code relies on datafiles:
 
 pupil_sextiles_final_CLEANED.R creates main figures and mixed-effects models for pupil-ripple rate analyses
 Relies on:
-- pupil_array_1_3.csv (main data)
+- pupil_array_1_3.csv (main data) IMPORTANT: this file is too big to be held on github. Instead, access it here: https://upenn.box.com/s/elos3yeyvylnk7q4g67iglb8caugmdd5
 - sub_elec_positions_allinfo_2025.csv (electrode information)
 - sleep_electrode_array_updated_final_9242025.csv (electrode information)
