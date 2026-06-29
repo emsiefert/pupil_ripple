@@ -1,6 +1,6 @@
 # ============================================================================
 # Sleep ripple analysis - NREM modulation and anatomical variation
-# Date last edited: 3/13/2025
+# Date last edited: 3/13/2025, ES
 # ============================================================================
 
 # Load required packages
@@ -21,7 +21,7 @@ library(tidyr)
 ################################################################################
 
 # Load raw ripple data across all channels and nights
-ripple_array_sleep <- read_csv("data/all_chan_ripple_final_9242025.csv", col_names = FALSE)
+ripple_array_sleep <- read_csv("all_chan_ripple_final_9242025.csv", col_names = FALSE)
 colnames(ripple_array_sleep) <- c(
   "sub_num", "electrode_num", "sleep_night", "block_num", 
   "ripple_index", "ripple_max_time", "keep_index", "ripple_time1", "ripple_time2", 
@@ -29,7 +29,7 @@ colnames(ripple_array_sleep) <- c(
 )
 
 # Load electrode quality scores and anatomical classifications
-sleep_elecs <- read_csv("data/sleep_electrode_array_updated_final_9242025.csv", col_names = FALSE)
+sleep_elecs <- read_csv("sleep_electrode_array_updated_final_9242025.csv", col_names = FALSE)
 colnames(sleep_elecs) <- c(
  "sub_num", "electrode_num", "keep_or_reject", "hipp_or_amy", "sleep_mod_score", "sleep_amp_score", "sleep_dur_score", "sleep_freq_score"
 )
@@ -41,7 +41,7 @@ ripple_array_sleep <- ripple_array_sleep %>%
            by = c("sub_num", "electrode_num"))
 
 # Load electrode anatomical positions (MNI coordinates, anterior-posterior location, region)
-sub_elec_positions <- read_csv("data/sub_elec_positions_allinfo_2025.csv", col_names = FALSE)
+sub_elec_positions <- read_csv("sub_elec_positions_allinfo_2025.csv", col_names = FALSE)
 colnames(sub_elec_positions) <- c(
   "sub_num", "electrode_num", "left_or_right", "hipp_or_amy", "AP", "RL", "SI","AP_uncal","apex_coord","elec_coord","coord_diff","close_flag","MNI_coord","post_50","post_35","post_MNI","overlap_50","overlap_MNI","overlap_35"
 )
@@ -52,10 +52,11 @@ ripple_array_sleep <- ripple_array_sleep %>%
               select(sub_num, electrode_num, hipp_or_amy, left_or_right, AP, AP_uncal), 
             by = c("sub_num", "electrode_num"))
 
-# Apply subject and session-level exclusions (based on data quality review)
+# Apply subject and session-level exclusions. We analyzed 2 nights of sleep from each participant (except one where only one night was collected).
+# Any additional nights that were recorded are removed here (i.e., nights where a participant had a seizure or other sleep disruption)
 ripple_array_sleep <- ripple_array_sleep %>%
   filter(
-    sub_num != 56,
+    sub_num != 56, #remove 56 because only had usable amygdala electrodes, but requiring each participant to have hippocampal electrodes
     !(sub_num == 44 & sleep_night == 1),
     !(sub_num == 49 & sleep_night == 1),
     !(sub_num == 54 & sleep_night == 3),
@@ -63,28 +64,28 @@ ripple_array_sleep <- ripple_array_sleep %>%
     !(sub_num == 57 & (sleep_night == 3 | sleep_night == 4)),
     !(sub_num == 64 & sleep_night == 1),
     !(sub_num == 69 & sleep_night == 2),
-    !(sub_num == 62 & electrode_num == 134),
-    !(sub_num == 49 & electrode_num == 38)
+    !(sub_num == 62 & electrode_num == 134), #removing electrode due to large artifacts across recordings
+    !(sub_num == 49 & electrode_num == 38) #removing electrode due to large artifacts across recordings
   )
 
 ################################################################################
 # SECTION 2: DATA FILTERING AND QUALITY CONTROL
 ################################################################################
 
-# Keep only detected ripple events that passed manual validation
+# Keep only detected ripple events that passed validation
 ripple_array_final_sleep <- filter(ripple_array_sleep, keep_index == 1)
-# Keep only ripples from high-quality electrodes
+# Keep only ripples from electrodes that passed validation
 ripple_array_final_sleep <- filter(ripple_array_final_sleep, keep_or_reject == 0)
 
 # Remove artifactual ripples with excessively high amplitudes (> 300 µV)
 ripple_array_final_sleep <- ripple_array_final_sleep %>%
   filter(amplitude < 300)
 
-# Consolidate sleep stages: combine N1, N2, N3 into single "NREM" category for analysis
-# (N1 is brief and unstable; combining with deeper NREM stages for more power)
+# Consolidate sleep stages: combine N2, N3 into single "NREM" category for analysis
+# not including N1 as it is a transitory state between wake and NREM, not convinced that it should be included with wake or with NREM, so keeping it out of this analysis.
 ripple_array_final_sleep <- ripple_array_final_sleep %>%
   mutate(sleep_stage2 = case_when(
-    sleep_stage == -1 ~ NA_real_,     # Convert -1 to NA
+    sleep_stage == -1 ~ NA_real_,     # Convert -1 to NA, this is N1.
     sleep_stage %in% c(-3, -2) ~ -1,  # Convert -3 and -2 to -1 (consolidated NREM)
     TRUE ~ sleep_stage                # Keep REM (0) and Wake (1) unchanged
   ))
@@ -135,14 +136,14 @@ ripple_rate_sleep2 <- ripple_array_sleep_rate%>%
          A_or_P_uncal = ifelse(AP_uncal==1,2,ifelse(AP_uncal==0,1)),
          A_or_P_or_amy = ifelse(is.nan(AP_uncal),2,AP_uncal))
 
-# Remove N1-only observations (consolidated into NREM category)
+# Remove N1-only observations 
 ripple_rate_sleep2 <- filter(ripple_rate_sleep2, !is.na(sleep_stage2))
 
 ################################################################################
 # SECTION 4: STATISTICAL MODELS - RIPPLE RATE ACROSS SLEEP STAGES
 ################################################################################
 
-# Account for subject overlap: subjects 42 and 49 have non-overlapping electrodes
+# Account for subject overlap: implant 42 and 49 come from the same participant, but have non-overlapping electrodes
 # (consolidate as same subject for random effects structure)
 ripple_rate_sleep$sub_num[ripple_rate_sleep$sub_num == 42] <- 49
 ripple_rate_sleep2$sub_num[ripple_rate_sleep2$sub_num == 42] <- 49
@@ -155,13 +156,13 @@ ripple_rate_sleep2_hipp <- ripple_rate_sleep2 %>%
 
 # MODEL 1: Anterior-Posterior dissociation within hippocampus
 # Test for differential modulation by sleep stage across anterior and posterior hippocampus
-ripple_rate_sleep2_hipp$A_or_P_uncal <- as.factor(ripple_rate_sleep2_hipp$A_or_P_uncal)
+ripple_rate_sleep2_hipp$A_or_P_uncal <- as.factor(ripple_rate_sleep2_hipp$A_or_P_uncal) #make sure its a factor
 ripple_rate_sleep2_hipp$sleep_stage2 <- as.factor(ripple_rate_sleep2_hipp$sleep_stage2)
 model.sleep1AP <- lmer(ripple_rate2 ~ sleep_stage2*A_or_P_uncal + (1 | sub_num/electrode_num), REML=F, data = ripple_rate_sleep2_hipp)
 
 # Print model summary and main effects
 summary(model.sleep1AP) 
-car::Anova(model.sleep1AP, type='III')
+car::Anova(model.sleep1AP, type='III') #anova for categorical variable significance
 
 # Post-hoc comparisons for overall hippocampus effect
 emmeans(model.sleep1AP,  ~ sleep_stage2)
@@ -174,7 +175,7 @@ emmeans(model.sleep1AP, pairwise ~ A_or_P_uncal | sleep_stage2, lmer.df='sattert
 
 # MODEL 2: Hippocampus vs Amygdala comparison
 # Test for regional differences in ripple rate modulation across sleep stages
-ripple_rate_sleep2$hipp_or_amy <- as.factor(ripple_rate_sleep2$hipp_or_amy)
+ripple_rate_sleep2$hipp_or_amy <- as.factor(ripple_rate_sleep2$hipp_or_amy) #make sure factor
 ripple_rate_sleep2$sleep_stage2 <- as.factor(ripple_rate_sleep2$sleep_stage2)
 model.sleep1AP <- lmer(ripple_rate2 ~ sleep_stage2*hipp_or_amy + (1 | sub_num/electrode_num), REML=F, data = ripple_rate_sleep2)
 
@@ -186,7 +187,7 @@ emmeans(model.sleep1AP, pairwise ~ sleep_stage2 | hipp_or_amy, lmer.df='satterth
 emmeans(model.sleep1AP, pairwise ~ hipp_or_amy | sleep_stage2, lmer.df='satterthwaite')
 
 # MODEL 3: Continuous anterior-posterior position within hippocampus
-# Test for graded effect of A-P position (not categorical, but continuous)
+# Test for graded effect of A-P position (not categorical, but continuous). 
 model.sleep1 <- lmer(ripple_rate2 ~ sleep_stage2*AP + (1 | sub_num/electrode_num), REML=F, data = ripple_rate_sleep2_hipp)
 
 summary(model.sleep1)
@@ -197,8 +198,8 @@ test(emtrends(model.sleep1, ~ sleep_stage2, var = "AP", lmer.df = "satterthwaite
 # SECTION 5: MODULATION INDEX CALCULATION AND STATS TEST
 ################################################################################
 
-# Calculate modulation score: compare NREM vs REM ripple rates for each electrode
-# Positive values = higher in NREM; negative = higher in REM
+# Calculate modulation score: compare NREM vs wake ripple rates for each electrode
+# Positive values = higher in NREM; negative = higher in wake
 
 mod_scores <- ripple_rate_sleep2_hipp %>%
   filter(sleep_stage2 %in% c(-1, 1)) %>%
@@ -212,9 +213,9 @@ mod_scores <- ripple_rate_sleep2_hipp %>%
     values_from = mean_rate,
     names_prefix = "rate_"
   ) %>%
-  rename(nrem_rate = `rate_-1`, rem_rate = rate_1) %>%
+  rename(nrem_rate = `rate_-1`, wake_rate = rate_1) %>%
   mutate(
-    mod_index = (nrem_rate - rem_rate) / (nrem_rate + rem_rate)
+    mod_index = (nrem_rate - wake_rate) / (nrem_rate + wake_rate)
   )
 
 # Fit mixed effects model: does modulation vary by anterior-posterior position?
@@ -234,15 +235,15 @@ df_summary_rate_hipp2 <- ripple_rate_sleep2 %>%
   summarise(avg_rate = mean(ripple_rate2, na.rm = TRUE),
             A_or_P_uncal = A_or_P_uncal[1])
 
-df_subject_rate_hipp2 <- df_summary_rate_hipp2 %>%
+df_subject_rate_hipp2 <- df_summary_rate_hipp2 %>% #all hippocampus
   group_by(sub_num, sleep_stage2) %>%
   summarise(avg_rate = mean(avg_rate, na.rm = TRUE), .groups = 'drop')
 
-df_subject_rate_hipp2_AP <- df_summary_rate_hipp2 %>%
+df_subject_rate_hipp2_AP <- df_summary_rate_hipp2 %>% #breakdown by A or P
   group_by(sub_num, A_or_P_uncal, sleep_stage2) %>%
   summarise(avg_rate = mean(avg_rate, na.rm = TRUE), .groups = 'drop')
 
-df_mean_rate_hipp2 <- df_subject_rate_hipp2 %>%
+df_mean_rate_hipp2 <- df_subject_rate_hipp2 %>% #all hippocampus
   group_by(sleep_stage2) %>%
   summarise(
     avg_rate2 = mean(avg_rate, na.rm = TRUE),
@@ -250,7 +251,7 @@ df_mean_rate_hipp2 <- df_subject_rate_hipp2 %>%
     .groups = 'drop'
   )
 
-df_mean_rate_hipp2_AP <- df_subject_rate_hipp2_AP %>%
+df_mean_rate_hipp2_AP <- df_subject_rate_hipp2_AP %>% #A or P
   group_by(A_or_P_uncal, sleep_stage2) %>%
   summarise(
     avg_rate2 = mean(avg_rate, na.rm = TRUE),
@@ -290,6 +291,21 @@ df_mean_rate_amy <- df_subject_rate_amy %>%
             sem = sd(avg_rate, na.rm = TRUE) / sqrt(n()),
             .groups = 'drop')
 
+# amgydala data for NREM-consolidated data
+df_summary_rate_amy2 <- ripple_rate_sleep2 %>%
+  filter(!is.nan(sleep_stage2), hipp_or_amy == 2) %>%
+  group_by(sub_num, electrode_num, sleep_stage2) %>%
+  summarise(avg_rate = mean(ripple_rate2, na.rm = TRUE), .groups = 'drop')
+
+df_subject_rate_amy2 <- df_summary_rate_amy2 %>%
+  group_by(sub_num, sleep_stage2) %>%
+  summarise(avg_rate = mean(avg_rate, na.rm = TRUE), .groups = 'drop')
+
+df_mean_rate_amy2 <- df_subject_rate_amy2 %>%
+  group_by(sleep_stage2) %>%
+  summarise(avg_rate2 = mean(avg_rate, na.rm = TRUE),
+            sem = sd(avg_rate, na.rm = TRUE) / sqrt(n()),
+            .groups = 'drop')
 ################################################################################
 # SECTION 6: PLOTTING FUNCTIONS
 ################################################################################
@@ -373,7 +389,7 @@ plot_sleep_data_combined <- function(df_mean, sleep_stage_info_col,
 sleep_stage_labels2 <- c('NREM', 'REM', 'W')
 sleep_stage_colors2 <- c(
   rgb(32, 120, 180, maxColorValue = 255),     # NREM (blue)
-  rgb(97, 173, 205, maxColorValue = 255),     # REM (light blue)
+  rgb(104, 193, 176, maxColorValue = 255),   # Teal (REM)
   rgb(191, 191, 196, maxColorValue = 255)     # Wake (grey)
 )
 
@@ -384,7 +400,7 @@ sleep_stage_colors_final <- c(
   rgb(36, 68, 142, maxColorValue = 255),   # N2
   rgb(70, 118, 224, maxColorValue = 255),  # N1
   
-  rgb(104, 193, 176, maxColorValue = 255),   # REM
+  rgb(104, 193, 176, maxColorValue = 255),   # Teal (REM)
   rgb(191, 191, 196, maxColorValue = 255)  # W
 )
 
@@ -421,6 +437,15 @@ hipp_combined_plot <- plot_sleep_data_combined(df_mean_combined,
                                                title_text = "Anterior vs Posterior Hippocampus")
 
 hipp_combined_plot
+
+## plot amgydala simple
+amy_sum_rate_simple <- plot_sleep_data_errorbar_simple(df_subject_rate_amy2, df_mean_rate_amy2, 
+                                                        sleep_stage2, sleep_stage2,
+                                                        c(-1:1), sleep_stage_labels2,
+                                                        avg_rate, avg_rate2,
+                                                        c(0.02,.07), sleep_stage_colors2, "Rate (hz)", "Amygdala")
+amy_sum_rate_simple
+
 
 ## ===== PLOT 2: All Three Regions with Full Sleep Stages (N3, N2, N1, REM, Wake) =====
 # Prepare combined data for anterior hipp, posterior hipp, and amygdala (all sleep stages)

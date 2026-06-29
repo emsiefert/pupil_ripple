@@ -1,7 +1,8 @@
-# Sleep Stage Analysis and Visualization
-# This script loads sleep data, filters for quality records, and creates 
+# Sleep stage analysis and visualization - for pupil_ripple paper
+# This script loads sleep duration data, filters for quality records, and creates 
 # stacked bar plots showing sleep stage duration across participants
-# last edited 3/24/2025
+# last edited 3/24/2025, ES
+
 # Load required libraries
 library(ggplot2)
 library(dplyr)
@@ -20,7 +21,7 @@ library(tidyr)
 # ============================================================================
 
 # Load raw sleep data from CSV file
-sleep_array <- read_csv("data/stage_table_9242025.csv", col_names = TRUE)
+sleep_array <- read_csv("stage_table_9242025.csv", col_names = TRUE)
 
 # Rename columns to meaningful variable names for consistency
 colnames(sleep_array) <- c(
@@ -40,11 +41,13 @@ colnames(sleep_array) <- c(
 )
 
 # ============================================================================
-# SECTION 2: FILTER DATA - REMOVE PROBLEMATIC RECORDS
+# SECTION 2: FILTER DATA - EXCLUSIONS
 # ============================================================================
 
-# Filter out participants and sessions with data quality issues
-# These exclusions are based on quality control checks
+# Filter out participants and sessions not using
+# We analyzed 2 sleep nights for each participant (except for one participant where only one sleep night was recorded).
+# Here we are removing additional sleep nights, as we often recorded more than 2 nights if a participant had a seizure or other sleep disruption (removing nights where a participant had a seizure).
+
 final_sleep_array <- sleep_array %>%
   mutate(
     sub_num = as.character(sub_num),
@@ -74,7 +77,7 @@ mean_sleep_hours <- mean(final_sleep_array$time_sleep) / 60  # ~7.5 hours
 # Standard deviation of total sleep time
 sd_sleep_hours <- sd(final_sleep_array$time_sleep) / 60
 
-# Minimum values for quality checking
+# Minimum values for reporting
 min_other_hours <- min(final_sleep_array$time_other) / 60
 min_NREM_minutes <- min(final_sleep_array$time_NREM)
 min_wake_minutes <- min(final_sleep_array$time_W)
@@ -107,6 +110,8 @@ summary_table <- final_sleep_array %>%
 # ============================================================================
 
 # Create lookup table mapping EMU participant codes to paper codes
+# These are already anonymized, but in the paper have been converted to a simple 1-20 numbering
+
 subject_mapping <- tibble(
   sub_num = c("PAV037", "PAV038", "PAV040", "PAV042", "PAV043", "PAV044", 
               "PAV045", "PAV048", "PAV049", "PAV051", "PAV053", "PAV054", 
@@ -190,7 +195,7 @@ plot_simple <- ggplot(sleep_long_simple,
   scale_x_discrete(labels = final_sleep_array$sub_label) +
   labs(title = "Sleep Stage Duration - Combined NREM",
        x = "Sleep Session (Participant)",
-       y = "Time (hours)",
+       y = "Time (hr)",
        fill = "Sleep Stage") +
   theme_minimal(base_family = "Helvetica", base_size = 14) +
   theme(panel.background = element_rect(fill = "white", color = NA),
@@ -211,7 +216,7 @@ plot_detailed <- ggplot(sleep_long_detailed,
   scale_x_discrete(labels = final_sleep_array$sub_label) +
   labs(title = "Sleep Stage Duration - Individual NREM Stages",
        x = "Sleep Session (Participant)",
-       y = "Time (hours)",
+       y = "Time (hr)",
        fill = "Sleep Stage") +
   theme_minimal(base_family = "Helvetica", base_size = 14) +
   theme(panel.background = element_rect(fill = "white", color = NA),
