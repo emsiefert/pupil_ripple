@@ -1,28 +1,28 @@
 # pupil_ripple
 Data and code for main figs and analyses in pupil ripple paper:
 
-Arousal state modulates human hippocampal ripples  
+**Arousal state modulates human hippocampal ripples**  
 Siefert, E.M. et al.  
 now on biorxiv: https://www.biorxiv.org/content/10.64898/2026.06.26.734578v1
 
 
-sleep_ripple_plots_final_CLEAN.R: creates main figures and runs mixed-effects models for sleep-ripple rate analyses.
+*sleep_ripple_plots_final_CLEAN.R*: creates main figures and runs mixed-effects models for sleep-ripple rate analyses.
 Data used:
 - all_chan_ripple_final_9242025.csv (main data file)
 - sleep_electrode_array_updated_final_9242025.csv (electrode information)
 - sub_elec_positions_allinfo_2025.csv (additional electrode information)
 
-sleep_summary_final_CLEAN.R: generates sleep duration information across participants, and associated supplemental figures. 
+*sleep_summary_final_CLEAN.R*: generates sleep duration information across participants, and associated supplemental figures. 
 Data used:
 - stage_table_9242025.csv (stage duration data)
 
-pupil_sextiles_final_CLEANED.R: creates main figures and mixed-effects models for pupil-ripple rate analyses. 
+*pupil_sextiles_final_CLEANED.R*: creates main figures and mixed-effects models for pupil-ripple rate analyses. 
 Data used:
 - pupil_array_1_3.csv (main data) IMPORTANT: this file is too big to be held on github. Instead, access it here: https://upenn.box.com/s/elos3yeyvylnk7q4g67iglb8caugmdd5
 - sub_elec_positions_allinfo_2025.csv (electrode information)
 - sleep_electrode_array_updated_final_9242025.csv (electrode information)
 
-heart_rate_sleep_RRintervals_final_CLEAN.R: creates main figures and mixed-effects models for heart rate-ripple analyses.
+*heart_rate_sleep_RRintervals_final_CLEAN.R*: creates main figures and mixed-effects models for heart rate-ripple analyses.
 Data used:
 - array_for_R_RR_50hz_sleep.csv (main data)
 - sub_elec_positions_allinfo_2025.csv (electrode information)
