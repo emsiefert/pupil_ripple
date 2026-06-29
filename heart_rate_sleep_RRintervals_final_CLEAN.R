@@ -1,10 +1,11 @@
-# Heart rate analyses for RR intervals during sleep
-# 1/22/2026
-
 # ============================================================================
+# Heart rate analyses for RR intervals during sleep recordings
+# mixed effects models (main manuscript), plots (main manuscript), modulation scores (in supplement).
+# everything has all sleep (analysis on full recording, across all stages), NREM only, and wake only.
+# last updated April/June 2026, ES
+# ============================================================================
+
 # LIBRARIES
-# ============================================================================
-
 library(ggplot2)
 library(dplyr)
 library(readr)
@@ -21,7 +22,7 @@ library(tidyr)
 # LOAD DATA
 # ============================================================================
 
-heart_rate_sleep_50 <- read.csv("data/heart_rate_ripple/array_for_R_RR_50hz_sleep.csv", header = FALSE)
+heart_rate_sleep_50 <- read.csv("array_for_R_RR_50hz_sleep.csv", header = FALSE)
 
 colnames(heart_rate_sleep_50) <- c(
   "sub_num", "electrode_num", "hipp_or_amy",
@@ -36,7 +37,7 @@ colnames(heart_rate_sleep_50) <- c(
 # ============================================================================
 
 # Set up ripple rate arrays
-heart_rate_sleep_50 <- heart_rate_sleep_50 %>%
+heart_rate_sleep_50 <- heart_rate_sleep_50 %>% #make values numeric
   mutate(
     RR_sextile = as.numeric(sextile),
     ripple_count = as.numeric(ripple_count),
@@ -49,7 +50,7 @@ heart_rate_sleep_50 <- heart_rate_sleep_50 %>%
     sub_num = as.factor(sub_num)
   )
 
-# Calculate ripple rate
+# Calculate ripple rate, from heart rate that was interpolated to 50 Hz
 heart_rate_sleep_50 <- heart_rate_sleep_50 %>%
   mutate(
     ripple_rate = ripple_count / (row_count / 50),
@@ -60,7 +61,7 @@ heart_rate_sleep_50 <- heart_rate_sleep_50 %>%
 heart_rate_sleep_50 <- heart_rate_sleep_50 %>%
   mutate(A_or_P_or_amy = ifelse(hipp_or_amy == 2, 2, A_or_P))
 
-# Apply exclusions
+# Apply exclusions - from sleep data. Removing these electrodes given large artifacts observed during sleep.
 heart_rate_sleep_50 <- heart_rate_sleep_50 %>%
   filter(
     !(sub_num == 62 & electrode_num == 134),
@@ -68,7 +69,7 @@ heart_rate_sleep_50 <- heart_rate_sleep_50 %>%
   )
 
 # Load and merge electrode position data
-sub_elec_positions <- read_csv("data/sub_elec_positions_allinfo_2025.csv", col_names = FALSE)
+sub_elec_positions <- read_csv("sub_elec_positions_allinfo_2025.csv", col_names = FALSE)
 colnames(sub_elec_positions) <- c(
   "sub_num", "electrode_num", "left_or_right", "hipp_or_amy", "AP", "RL", "SI",
   "AP_uncal", "apex_coord", "elec_coord", "coord_diff", "close_flag",
@@ -82,234 +83,19 @@ heart_rate_sleep_50 <- heart_rate_sleep_50 %>%
     by = c("sub_num", "electrode_num"))
 
 # ============================================================================
-# CREATE MODULATION SCORE ARRAYS
-# ============================================================================
-
-# Array by electrode
-modulation_df_elec <- heart_rate_sleep_50 %>%
-  group_by(sub_num, electrode_num, RR_sextile) %>%
-  summarise(
-    mean_ripple_rate = mean(ripple_rate, na.rm = TRUE),
-    mean_ripple_rate_NREM = mean(ripple_rate_NREM, na.rm = TRUE),
-    mean_ripple_rate_W = mean(ripple_rate_W, na.rm = TRUE),
-    AP_uncal = A_or_P[1],
-    hipp_or_amy = hipp_or_amy[1],
-    A_or_P_or_amy = A_or_P_or_amy[1],
-    AP = AP[1],
-    .groups = "drop")
-
-# Calculate modulation differences by electrode
-modulation_diff_df_elec <- modulation_df_elec %>%
-  group_by(sub_num, electrode_num) %>%
-  summarise(
-    diff_mod = (mean(mean_ripple_rate[RR_sextile %in% c(1, 2)]) -
-                mean(mean_ripple_rate[RR_sextile %in% c(5, 6)])) /
-              (mean(mean_ripple_rate[RR_sextile %in% c(1, 2)]) +
-                mean(mean_ripple_rate[RR_sextile %in% c(5, 6)])),
-    diff_mod_NREM = (mean(mean_ripple_rate_NREM[RR_sextile %in% c(1, 2)]) -
-                     mean(mean_ripple_rate_NREM[RR_sextile %in% c(5, 6)])) /
-                    (mean(mean_ripple_rate_NREM[RR_sextile %in% c(1, 2)]) +
-                      mean(mean_ripple_rate_NREM[RR_sextile %in% c(5, 6)])),
-    diff_mod_Wake = (mean(mean_ripple_rate_W[RR_sextile %in% c(1, 2)]) -
-                     mean(mean_ripple_rate_W[RR_sextile %in% c(5, 6)])) /
-                    (mean(mean_ripple_rate_W[RR_sextile %in% c(1, 2)]) +
-                      mean(mean_ripple_rate_W[RR_sextile %in% c(5, 6)])),
-    AP_uncal = AP_uncal[1],
-    hipp_or_amy = hipp_or_amy[1],
-    AP = AP[1],
-    .groups = "drop"
-  )
-
-# Fix subject number
-modulation_diff_df_elec$sub_num[modulation_diff_df_elec$sub_num == 49] <- 42
-modulation_df_elec$sub_num[modulation_df_elec$sub_num == 49] <- 42
-
-# Array by region
-modulation_diff_df_region <- modulation_df_elec %>%
-  group_by(sub_num, A_or_P_or_amy) %>%
-  summarise(
-    diff_mod = (mean(mean_ripple_rate[RR_sextile %in% c(1, 2)]) -
-                mean(mean_ripple_rate[RR_sextile %in% c(5, 6)])) /
-              (mean(mean_ripple_rate[RR_sextile %in% c(1, 2)]) +
-                mean(mean_ripple_rate[RR_sextile %in% c(5, 6)])),
-    diff_mod_NREM = (mean(mean_ripple_rate_NREM[RR_sextile %in% c(1, 2)]) -
-                     mean(mean_ripple_rate_NREM[RR_sextile %in% c(5, 6)])) /
-                    (mean(mean_ripple_rate_NREM[RR_sextile %in% c(1, 2)]) +
-                      mean(mean_ripple_rate_NREM[RR_sextile %in% c(5, 6)])),
-    diff_mod_Wake = (mean(mean_ripple_rate_W[RR_sextile %in% c(1, 2)]) -
-                     mean(mean_ripple_rate_W[RR_sextile %in% c(5, 6)])) /
-                    (mean(mean_ripple_rate_W[RR_sextile %in% c(1, 2)]) +
-                      mean(mean_ripple_rate_W[RR_sextile %in% c(5, 6)])),
-    AP_uncal = AP_uncal[1],
-    hipp_or_amy = hipp_or_amy[1],
-    .groups = "drop"
-  )
-
-# Filter and prepare for plotting
-modulation_diff_df_filtered <- modulation_diff_df_region %>%
-  filter(A_or_P_or_amy %in% c(0, 1, 2)) %>%
-  mutate(
-    Region = factor(A_or_P_or_amy,
-                    levels = c(0, 1, 2),
-                    labels = c("Ant. Hipp", "Post. Hipp", "Amyg.")),
-    line_color = case_when(
-      A_or_P_or_amy == 0 ~ "#9a81bb",
-      A_or_P_or_amy == 1 ~ "#d57bb2",
-      A_or_P_or_amy == 2 ~ "#ec8035"
-    )
-  )
-
-# Summary statistics
-modulation_summary <- modulation_diff_df_filtered %>%
-  group_by(Region, line_color) %>%
-  summarise(
-    mean_diff_mod = mean(diff_mod, na.rm = TRUE),
-    sem_diff_mod = sd(diff_mod, na.rm = TRUE) / sqrt(n()),
-    mean_diff_mod_NREM = mean(diff_mod_NREM, na.rm = TRUE),
-    sem_diff_mod_NREM = sd(diff_mod_NREM, na.rm = TRUE) / sqrt(n()),
-    mean_diff_mod_W = mean(diff_mod_Wake, na.rm = TRUE),
-    sem_diff_mod_W = sd(diff_mod_Wake, na.rm = TRUE) / sqrt(n()),
-    .groups = "drop"
-  )
-
-# ============================================================================
-# PLOT 1: Pupil modulation of ripple rate - ALL SLEEP - SUPPLEMENT
-# ============================================================================
-
-plot_diff_APamy_mod_allsleep <- ggplot() +
-  geom_hline(yintercept = 0, linetype = "dotted", color = "black", linewidth = 0.8) +
-  geom_line(
-    data = modulation_diff_df_filtered,
-    aes(x = Region, y = diff_mod, group = sub_num),
-    color = "gray70",
-    linewidth = 0.7,
-    alpha = 0.3
-  ) +
-  geom_jitter(
-    data = modulation_diff_df_filtered,
-    aes(x = Region, y = diff_mod, fill = line_color),
-    shape = ifelse(modulation_diff_df_filtered$Region == "Ant. Hipp", 21,
-                   ifelse(modulation_diff_df_filtered$Region == "Post. Hipp", 23, 24)),
-    size = 4,
-    alpha = 0.3,
-    width = 0,
-    stroke = .2,
-    show.legend = FALSE
-  ) +
-  geom_errorbar(
-    data = modulation_summary,
-    aes(x = Region,
-        ymin = mean_diff_mod - sem_diff_mod,
-        ymax = mean_diff_mod + sem_diff_mod),
-    width = 0.15,
-    color = "black",
-    size = 1
-  ) +
-  geom_point(
-    data = modulation_summary,
-    aes(x = Region, y = mean_diff_mod, fill = line_color),
-    shape = ifelse(modulation_summary$Region == "Ant. Hipp", 21,
-                   ifelse(modulation_summary$Region == "Post. Hipp", 23, 24)),
-    size = 4,
-    stroke = 1.5,
-    color = "black"
-  ) +
-  scale_fill_identity() +
-  labs(
-    x = NULL,
-    y = "Ripple rate symmetry index",
-    title = "Pupil modulation of ripple rate"
-  ) +
-  theme_light(base_size = 14) +
-  theme(
-    panel.background = element_rect(fill = "white", color = "white"),
-    plot.background = element_rect(fill = "white", color = "white"),
-    plot.title = element_text(hjust = 0.5)
-  ) +
-  scale_y_reverse(limits = c(-.5, .6))
-plot_diff_APamy_mod_allsleep
-
-# ============================================================================
-# PLOT 2: Pupil modulation of ripple rate - NREM ONLY - SUPPLEMENT
-# ============================================================================
-
-plot_diff_APamy_mod_NREM <- ggplot() +
-  geom_hline(yintercept = 0, linetype = "dotted", color = "black", linewidth = 0.8) +
-  geom_line(data = modulation_diff_df_filtered,
-            aes(x = Region, y = diff_mod_NREM, group = sub_num),
-            color = "gray70", linewidth = 0.7, alpha = 0.3) +
-  geom_jitter(data = modulation_diff_df_filtered,
-              aes(x = Region, y = diff_mod_NREM, fill = line_color),
-              shape = ifelse(modulation_diff_df_filtered$Region == "Ant. Hipp", 21,
-                             ifelse(modulation_diff_df_filtered$Region == "Post. Hipp", 23, 24)),
-              size = 4, alpha = 0.3, width = 0, stroke = .2, show.legend = FALSE) +
-  geom_errorbar(data = modulation_summary,
-                aes(x = Region,
-                    ymin = mean_diff_mod_NREM - sem_diff_mod_NREM,
-                    ymax = mean_diff_mod_NREM + sem_diff_mod_NREM),
-                width = 0.15, color = "black", size = 1) +
-  geom_point(data = modulation_summary,
-             aes(x = Region, y = mean_diff_mod_NREM, fill = line_color),
-             shape = ifelse(modulation_summary$Region == "Ant. Hipp", 21,
-                            ifelse(modulation_summary$Region == "Post. Hipp", 23, 24)),
-             size = 4, stroke = 1.5, color = "black") +
-  scale_fill_identity() +
-  labs(x = NULL, y = "Ripple rate symmetry index",
-       title = "Pupil modulation of ripple rate") +
-  theme_light(base_size = 14) +
-  theme(panel.background = element_rect(fill = "white", color = "white"),
-        plot.background = element_rect(fill = "white", color = "white"),
-        plot.title = element_text(hjust = 0.5)) +
-  scale_y_reverse(limits = c(-.5, .6))
-plot_diff_APamy_mod_NREM
-
-# ============================================================================
-# PLOT 3: Pupil modulation of ripple rate - WAKE ONLY - SUPPLEMENT
-# ============================================================================
-
-plot_diff_APamy_mod_Wake <- ggplot() +
-  geom_hline(yintercept = 0, linetype = "dotted", color = "black", linewidth = 0.8) +
-  geom_line(data = modulation_diff_df_filtered,
-            aes(x = Region, y = diff_mod_Wake, group = sub_num),
-            color = "gray70", linewidth = 0.7, alpha = 0.3) +
-  geom_jitter(data = modulation_diff_df_filtered,
-              aes(x = Region, y = diff_mod_Wake, fill = line_color),
-              shape = ifelse(modulation_diff_df_filtered$Region == "Ant. Hipp", 21,
-                             ifelse(modulation_diff_df_filtered$Region == "Post. Hipp", 23, 24)),
-              size = 4, alpha = 0.3, width = 0, stroke = .2, show.legend = FALSE) +
-  geom_errorbar(data = modulation_summary,
-                aes(x = Region,
-                    ymin = mean_diff_mod_W - sem_diff_mod_W,
-                    ymax = mean_diff_mod_W + sem_diff_mod_W),
-                width = 0.15, color = "black", size = 1) +
-  geom_point(data = modulation_summary,
-             aes(x = Region, y = mean_diff_mod_W, fill = line_color),
-             shape = ifelse(modulation_summary$Region == "Ant. Hipp", 21,
-                            ifelse(modulation_summary$Region == "Post. Hipp", 23, 24)),
-             size = 4, stroke = 1.5, color = "black") +
-  scale_fill_identity() +
-  labs(x = NULL, y = "Ripple rate symmetry index",
-       title = "Pupil modulation of ripple rate") +
-  theme_light(base_size = 14) +
-  theme(panel.background = element_rect(fill = "white", color = "white"),
-        plot.background = element_rect(fill = "white", color = "white"),
-        plot.title = element_text(hjust = 0.5)) +
-  scale_y_reverse(limits = c(-.5, .6))
-plot_diff_APamy_mod_Wake
-
-# ============================================================================
 # MIXED EFFECTS MODELS
 # ============================================================================
 
-# Fix subject number
+# Fix subject number, two implants but same participant. Non overlapping electrodes, but same participant for nested models
 heart_rate_sleep_50$sub_num[heart_rate_sleep_50$sub_num == 49] <- 42
 
 # Filter for hippocampus
 heart_rate_sleep_50_hipp <- heart_rate_sleep_50 %>%
   filter(hipp_or_amy == 1)
 
-# Reverse sextiles for model interpretability
+# Reverse sextiles for model interpretability!!!! This reversal is important for interpreting the reporting in the paper and aligning it with the results printed here.
 heart_rate_sleep_50_hipp$RR_sextile_rev <- 7 - heart_rate_sleep_50_hipp$RR_sextile
+heart_rate_sleep_50$RR_sextile_rev <- 7 - heart_rate_sleep_50$RR_sextile
 
 # ============================================================================
 # ALL SLEEP MODELS - HIPPOCAMPUS
@@ -321,14 +107,14 @@ model.rate.hippAP <- lmer(ripple_rate ~ RR_sextile_rev * A_or_P + (1 | sub_num/e
                                REML = F, data = heart_rate_sleep_50_hipp)
 summary(model.rate.hippAP)
 car::Anova(model.rate.hippAP, type = 'III')
-test(emmeans(model.rate.hippAP, ~ RR_sextile_rev, at = list(RR_sextile_rev = c(1, 6))))
-emtrends(model.rate.hippAP, ~ A_or_P, var = "RR_sextile_rev")
+test(emmeans(model.rate.hippAP, ~ RR_sextile_rev, at = list(RR_sextile_rev = c(1, 6)))) #full hipp
+emtrends(model.rate.hippAP, ~ A_or_P, var = "RR_sextile_rev") #anterior and posterior
 test(emtrends(model.rate.hippAP, ~ A_or_P, var = "RR_sextile_rev"))
 emtrends(model.rate.hippAP, pairwise ~ A_or_P, var = "RR_sextile_rev")
 test(emmeans(model.rate.hippAP, pairwise ~ A_or_P | RR_sextile_rev,
         at = list(RR_sextile_rev = c(1, 6))))
 
-pp <- plot(ggpredict(model.rate.hippAP, terms = c('RR_sextile_rev', 'A_or_P'))) +
+pp <- plot(ggpredict(model.rate.hippAP, terms = c('RR_sextile_rev', 'A_or_P'))) + #plot model results
   theme_minimal(base_size = 14) +
   theme(panel.background = element_rect(fill = "white"),
         plot.background = element_rect(fill = "white"))
@@ -346,7 +132,6 @@ pp <- plot(ggpredict(model.EOEC.rate.hippAP, terms = c('RR_sextile_rev', 'AP')))
 pp
 
 # Model 3: All sleep, Hipp vs Amy
-heart_rate_sleep_50$RR_sextile_rev <- 7 - heart_rate_sleep_50$RR_sextile
 
 model.EOEC.rate.hippamy <- lmer(ripple_rate ~ RR_sextile_rev * hipp_or_amy + (1 | sub_num/electrode_num),
                                 REML = F, data = heart_rate_sleep_50)
@@ -357,13 +142,6 @@ test(emtrends(model.EOEC.rate.hippamy, ~ hipp_or_amy, var = "RR_sextile_rev"))
 emtrends(model.EOEC.rate.hippamy, pairwise ~ hipp_or_amy, var = "RR_sextile_rev")
 test(emmeans(model.EOEC.rate.hippamy, pairwise ~ hipp_or_amy | RR_sextile_rev,
              at = list(RR_sextile_rev = c(1, 6))))
-
-# Model 4: All sleep, modulation score
-modulation_diff_df_elec_hipp <- modulation_diff_df_elec %>% filter(hipp_or_amy == 1)
-modulation_diff_df_elec_hipp$diff_mod_rev <- 0 - modulation_diff_df_elec_hipp$diff_mod
-model.df <- lmer(diff_mod_rev ~ AP + (1 | sub_num), REML = F,
-                 data = modulation_diff_df_elec_hipp)
-summary(model.df)
 
 # ============================================================================
 # NREM ONLY MODELS
@@ -395,7 +173,7 @@ pp
 emtrends(model.NREM_hipp, ~ A_or_P, var = "RR_sextile_rev")
 test(emtrends(model.NREM_hipp, ~ A_or_P, var = "RR_sextile_rev"))
 emtrends(model.NREM_hipp, pairwise ~ A_or_P, var = "RR_sextile_rev")
-test(emmeans(model.NREM_hipp, pairwise ~ hipp_or_amy | RR_sextile_rev,
+test(emmeans(model.NREM_hipp, pairwise ~ A_or_P | RR_sextile_rev,
              at = list(RR_sextile_rev = c(1, 6))))
 
 
@@ -430,7 +208,7 @@ pp
 emtrends(model.wakeHipp, ~ A_or_P, var = "RR_sextile_rev")
 test(emtrends(model.wakeHipp, ~ A_or_P, var = "RR_sextile_rev"))
 emtrends(model.wakeHipp, pairwise ~ A_or_P, var = "RR_sextile_rev")
-test(emmeans(model.wakeHipp, pairwise ~ hipp_or_amy | RR_sextile_rev,
+test(emmeans(model.wakeHipp, pairwise ~ A_or_P | RR_sextile_rev,
              at = list(RR_sextile_rev = c(1, 6))))
 
 
@@ -472,49 +250,41 @@ simple_plot_final_nodots_indiv <- function(agg_data_use, y_limits,
 
 grey_shade <- "#A9A9A9"
 
-green_colors2 <- c(
-  rgb(16, 48, 32, maxColorValue = 255),
-  rgb(33, 70, 48, maxColorValue = 255),
-  rgb(63, 102, 79, maxColorValue = 255),
-  rgb(95, 134, 112, maxColorValue = 255),
-  rgb(128, 168, 147, maxColorValue = 255),
-  rgb(163, 201, 182, maxColorValue = 255)
-)
-
-purple_colors2 <- c(
-  rgb(36, 16, 65, maxColorValue = 255),
-  rgb(53, 33, 84, maxColorValue = 255),
-  rgb(87, 63, 117, maxColorValue = 255),
-  rgb(121, 95, 151, maxColorValue = 255),
+purple_colors2 <- c( #anterior hipp
+  rgb(191, 163, 206, maxColorValue = 255),
   rgb(155, 128, 187, maxColorValue = 255),
-  rgb(191, 163, 206, maxColorValue = 255)
+  rgb(121, 95, 151, maxColorValue = 255),
+  rgb(87, 63, 117, maxColorValue = 255),
+  rgb(53, 33, 84, maxColorValue = 255),
+  rgb(36, 16, 65, maxColorValue = 255)
+
 )
 
-blue_purple <- c(
-  rgb(19, 27, 71, maxColorValue = 255),
-  rgb(34, 53, 106, maxColorValue = 255),
-  rgb(64, 81, 141, maxColorValue = 255),
-  rgb(100, 113, 176, maxColorValue = 255),
+blue_purple <- c( #hippocampus
+  rgb(173, 179, 218, maxColorValue = 255),
   rgb(135, 146, 201, maxColorValue = 255),
-  rgb(173, 179, 218, maxColorValue = 255)
+  rgb(100, 113, 176, maxColorValue = 255),
+  rgb(64, 81, 141, maxColorValue = 255),
+  rgb(34, 53, 106, maxColorValue = 255),
+  rgb(19, 27, 71, maxColorValue = 255)
 )
 
-pink_colors <- c(
-  rgb(81, 12, 64, maxColorValue = 255),
-  rgb(120, 33, 100, maxColorValue = 255),
-  rgb(154, 59, 129, maxColorValue = 255),
-  rgb(187, 89, 160, maxColorValue = 255),
+pink_colors <- c( #posterior hipp
+  rgb(227, 161, 199, maxColorValue = 255),
   rgb(213, 123, 178, maxColorValue = 255),
-  rgb(227, 161, 199, maxColorValue = 255)
+  rgb(187, 89, 160, maxColorValue = 255),
+  rgb(154, 59, 129, maxColorValue = 255),
+  rgb(120, 33, 100, maxColorValue = 255),
+  rgb(81, 12, 64, maxColorValue = 255)
 )
 
-orange_colors <- c(
-  rgb(110, 14, 16, maxColorValue = 255),
-  rgb(148, 34, 30, maxColorValue = 255),
-  rgb(183, 62, 37, maxColorValue = 255),
-  rgb(213, 92, 39, maxColorValue = 255),
+orange_colors <- c( #amygdala
+  rgb(249, 163, 95, maxColorValue = 255),
   rgb(236, 128, 53, maxColorValue = 255),
-  rgb(249, 163, 95, maxColorValue = 255)
+  rgb(213, 92, 39, maxColorValue = 255),
+  rgb(183, 62, 37, maxColorValue = 255),
+  rgb(148, 34, 30, maxColorValue = 255),
+  rgb(110, 14, 16, maxColorValue = 255)
 )
 
 # ============================================================================
@@ -642,7 +412,7 @@ agg_data_hipp_P50W <- agg_data_AP50W %>% filter(A_or_P == 1)
 
 hipp_final_simple5 <- simple_plot_final_nodots_indiv(
   agg_data_use = hipp_agg50,
-  y_limits = c(0.02, 0.07),
+  y_limits = c(0.02, 0.06),
   color_vector = blue_purple,
   grey_shade = grey_shade,
   plot_title = "Hippocampus"
@@ -651,7 +421,7 @@ hipp_final_simple5
 
 amy_final_simple5 <- simple_plot_final_nodots_indiv(
   agg_data_use = amy_agg50,
-  y_limits = c(0.02, 0.07),
+  y_limits = c(0.02, 0.06),
   color_vector = orange_colors,
   grey_shade = grey_shade,
   plot_title = "Amygdala"
@@ -669,7 +439,7 @@ hipp_final_simple_A5
 
 hipp_final_simple_P5 <- simple_plot_final_nodots_indiv(
   agg_data_use = agg_data_hipp_P50,
-  y_limits = c(0.02, 0.07),
+  y_limits = c(0.02, 0.06),
   color_vector = pink_colors,
   grey_shade = grey_shade,
   plot_title = "Posterior hippocampus"
@@ -890,62 +660,229 @@ plot_all_sextiles_APamyWake <- ggplot() +
 plot_all_sextiles_APamyWake
 
 # ============================================================================
-# HEART RATE ANALYSES
+# CREATE MODULATION SCORE ARRAYS
 # ============================================================================
 
-HR_means <- heart_rate_sleep_50 %>%
-  group_by(sub_num, sextile) %>%
+# Array by electrode
+modulation_df_elec <- heart_rate_sleep_50 %>%
+  group_by(sub_num, electrode_num, RR_sextile) %>%
   summarise(
-    mean_RR = mean(average_RR),
-    mean_RR_NREM = mean(average_RRNREM),
-    mean_RR_W = mean(averageRRW, na.rm = TRUE)
-  ) %>%
-  mutate(mean_HR = 60 / mean_RR,
-         mean_HR_NREM = 60 / mean_RR_NREM,
-         mean_HR_W = 60 / mean_RR_W)
+    mean_ripple_rate = mean(ripple_rate, na.rm = TRUE),
+    mean_ripple_rate_NREM = mean(ripple_rate_NREM, na.rm = TRUE),
+    mean_ripple_rate_W = mean(ripple_rate_W, na.rm = TRUE),
+    AP_uncal = A_or_P[1],
+    hipp_or_amy = hipp_or_amy[1],
+    A_or_P_or_amy = A_or_P_or_amy[1],
+    AP = AP[1],
+    .groups = "drop")
+
+# Calculate modulation differences by electrode
+modulation_diff_df_elec <- modulation_df_elec %>%
+  group_by(sub_num, electrode_num) %>%
+  summarise(
+    diff_mod = (mean(mean_ripple_rate[RR_sextile %in% c(1, 2)]) -
+                  mean(mean_ripple_rate[RR_sextile %in% c(5, 6)])) /
+      (mean(mean_ripple_rate[RR_sextile %in% c(1, 2)]) +
+         mean(mean_ripple_rate[RR_sextile %in% c(5, 6)])),
+    diff_mod_NREM = (mean(mean_ripple_rate_NREM[RR_sextile %in% c(1, 2)]) -
+                       mean(mean_ripple_rate_NREM[RR_sextile %in% c(5, 6)])) /
+      (mean(mean_ripple_rate_NREM[RR_sextile %in% c(1, 2)]) +
+         mean(mean_ripple_rate_NREM[RR_sextile %in% c(5, 6)])),
+    diff_mod_Wake = (mean(mean_ripple_rate_W[RR_sextile %in% c(1, 2)]) -
+                       mean(mean_ripple_rate_W[RR_sextile %in% c(5, 6)])) /
+      (mean(mean_ripple_rate_W[RR_sextile %in% c(1, 2)]) +
+         mean(mean_ripple_rate_W[RR_sextile %in% c(5, 6)])),
+    AP_uncal = AP_uncal[1],
+    hipp_or_amy = hipp_or_amy[1],
+    AP = AP[1],
+    .groups = "drop"
+  )
+
+# Fix participant number. These are two different implants of the same participant. Non-overlapping electrodes, but same participant.
+modulation_diff_df_elec$sub_num[modulation_diff_df_elec$sub_num == 49] <- 42
+modulation_df_elec$sub_num[modulation_df_elec$sub_num == 49] <- 42
+
+# Array by region
+modulation_diff_df_region <- modulation_df_elec %>%
+  group_by(sub_num, A_or_P_or_amy) %>%
+  summarise(
+    diff_mod = (mean(mean_ripple_rate[RR_sextile %in% c(1, 2)]) -
+                  mean(mean_ripple_rate[RR_sextile %in% c(5, 6)])) /
+      (mean(mean_ripple_rate[RR_sextile %in% c(1, 2)]) +
+         mean(mean_ripple_rate[RR_sextile %in% c(5, 6)])),
+    diff_mod_NREM = (mean(mean_ripple_rate_NREM[RR_sextile %in% c(1, 2)]) -
+                       mean(mean_ripple_rate_NREM[RR_sextile %in% c(5, 6)])) /
+      (mean(mean_ripple_rate_NREM[RR_sextile %in% c(1, 2)]) +
+         mean(mean_ripple_rate_NREM[RR_sextile %in% c(5, 6)])),
+    diff_mod_Wake = (mean(mean_ripple_rate_W[RR_sextile %in% c(1, 2)]) -
+                       mean(mean_ripple_rate_W[RR_sextile %in% c(5, 6)])) /
+      (mean(mean_ripple_rate_W[RR_sextile %in% c(1, 2)]) +
+         mean(mean_ripple_rate_W[RR_sextile %in% c(5, 6)])),
+    AP_uncal = AP_uncal[1],
+    hipp_or_amy = hipp_or_amy[1],
+    .groups = "drop"
+  )
+
+# Filter and prepare for plotting
+modulation_diff_df_filtered <- modulation_diff_df_region %>%
+  filter(A_or_P_or_amy %in% c(0, 1, 2)) %>%
+  mutate(
+    Region = factor(A_or_P_or_amy,
+                    levels = c(0, 1, 2),
+                    labels = c("Ant. Hipp", "Post. Hipp", "Amyg.")),
+    line_color = case_when(
+      A_or_P_or_amy == 0 ~ "#9a81bb",
+      A_or_P_or_amy == 1 ~ "#d57bb2",
+      A_or_P_or_amy == 2 ~ "#ec8035"
+    )
+  )
+
+# Summary statistics
+modulation_summary <- modulation_diff_df_filtered %>%
+  group_by(Region, line_color) %>%
+  summarise(
+    mean_diff_mod = mean(diff_mod, na.rm = TRUE),
+    sem_diff_mod = sd(diff_mod, na.rm = TRUE) / sqrt(n()),
+    mean_diff_mod_NREM = mean(diff_mod_NREM, na.rm = TRUE),
+    sem_diff_mod_NREM = sd(diff_mod_NREM, na.rm = TRUE) / sqrt(n()),
+    mean_diff_mod_W = mean(diff_mod_Wake, na.rm = TRUE),
+    sem_diff_mod_W = sd(diff_mod_Wake, na.rm = TRUE) / sqrt(n()),
+    .groups = "drop"
+  )
 
 # ============================================================================
-# HEART RATE PLOTTING FUNCTION
+# PLOT 1: RR modulation of ripple rate - ALL SLEEP - SUPPLEMENT
 # ============================================================================
 
-plot_sextile_hr <- function(df, summary_df, plot_title, y_limits = c(40, 100)) {
-  ggplot(data = df, aes(x = sextile)) +
-    geom_line(
-      aes(y = HR_plot, group = sub_num, color = color),
-      alpha = 0.2,
-      linewidth = 0.5
-    ) +
-    geom_jitter(
-      aes(y = HR_plot, color = color),
-      width = 0,
-      alpha = 0.2,
-      size = 3
-    ) +
-    geom_errorbar(
-      data = summary_df,
-      aes(x = sextile, ymin = mean_hr - sem_hr, ymax = mean_hr + sem_hr),
-      width = 0.2,
-      color = "black",
-      size = 1
-    ) +
-    geom_point(
-      data = summary_df,
-      aes(x = sextile, y = mean_hr, fill = color),
-      color = "black",
-      size = 5,
-      shape = 21,
-      stroke = 1.5
-    ) +
-    scale_color_grey(start = 0.8, end = 0.1) +
-    scale_fill_grey(start = 0.8, end = 0.1) +
-    scale_x_continuous(breaks = sort(unique(df$sextile)),
-                       labels = sort(unique(df$sextile))) +
-    scale_x_reverse(breaks = sort(unique(df$sextile))) +
-    labs(x = "RR interval sextile", y = "Heart rate (bpm)", title = plot_title) +
-    theme_light() +
-    theme(panel.background = element_rect(fill = "white", color = "white"),
-          plot.background = element_rect(fill = "white", color = "white"),
-          legend.position = "none") +
-    ylim(y_limits)
-}
+plot_diff_APamy_mod_allsleep <- ggplot() +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "black", linewidth = 0.8) +
+  geom_line(
+    data = modulation_diff_df_filtered,
+    aes(x = Region, y = diff_mod, group = sub_num),
+    color = "gray70",
+    linewidth = 0.7,
+    alpha = 0.3
+  ) +
+  geom_jitter(
+    data = modulation_diff_df_filtered,
+    aes(x = Region, y = diff_mod, fill = line_color),
+    shape = ifelse(modulation_diff_df_filtered$Region == "Ant. Hipp", 21,
+                   ifelse(modulation_diff_df_filtered$Region == "Post. Hipp", 23, 24)),
+    size = 4,
+    alpha = 0.3,
+    width = 0,
+    stroke = .2,
+    show.legend = FALSE
+  ) +
+  geom_errorbar(
+    data = modulation_summary,
+    aes(x = Region,
+        ymin = mean_diff_mod - sem_diff_mod,
+        ymax = mean_diff_mod + sem_diff_mod),
+    width = 0.15,
+    color = "black",
+    size = 1
+  ) +
+  geom_point(
+    data = modulation_summary,
+    aes(x = Region, y = mean_diff_mod, fill = line_color),
+    shape = ifelse(modulation_summary$Region == "Ant. Hipp", 21,
+                   ifelse(modulation_summary$Region == "Post. Hipp", 23, 24)),
+    size = 4,
+    stroke = 1.5,
+    color = "black"
+  ) +
+  scale_fill_identity() +
+  labs(
+    x = NULL,
+    y = "Ripple rate selectivity index",
+    title = "RR modulation of ripple rate"
+  ) +
+  theme_light(base_size = 14) +
+  theme(
+    panel.background = element_rect(fill = "white", color = "white"),
+    plot.background = element_rect(fill = "white", color = "white"),
+    plot.title = element_text(hjust = 0.5)
+  ) +
+  scale_y_reverse(limits = c(-.5, .6))
+plot_diff_APamy_mod_allsleep
+
+
+# Model 4: All sleep, modulation score
+modulation_diff_df_elec_hipp <- modulation_diff_df_elec %>% filter(hipp_or_amy == 1)
+modulation_diff_df_elec_hipp$diff_mod_rev <- 0 - modulation_diff_df_elec_hipp$diff_mod
+model.df <- lmer(diff_mod_rev ~ AP + (1 | sub_num), REML = F,
+                 data = modulation_diff_df_elec_hipp)
+summary(model.df)
+
+# ============================================================================
+# PLOT 2: RR modulation of ripple rate - NREM ONLY - SUPPLEMENT
+# ============================================================================
+
+plot_diff_APamy_mod_NREM <- ggplot() +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "black", linewidth = 0.8) +
+  geom_line(data = modulation_diff_df_filtered,
+            aes(x = Region, y = diff_mod_NREM, group = sub_num),
+            color = "gray70", linewidth = 0.7, alpha = 0.3) +
+  geom_jitter(data = modulation_diff_df_filtered,
+              aes(x = Region, y = diff_mod_NREM, fill = line_color),
+              shape = ifelse(modulation_diff_df_filtered$Region == "Ant. Hipp", 21,
+                             ifelse(modulation_diff_df_filtered$Region == "Post. Hipp", 23, 24)),
+              size = 4, alpha = 0.3, width = 0, stroke = .2, show.legend = FALSE) +
+  geom_errorbar(data = modulation_summary,
+                aes(x = Region,
+                    ymin = mean_diff_mod_NREM - sem_diff_mod_NREM,
+                    ymax = mean_diff_mod_NREM + sem_diff_mod_NREM),
+                width = 0.15, color = "black", size = 1) +
+  geom_point(data = modulation_summary,
+             aes(x = Region, y = mean_diff_mod_NREM, fill = line_color),
+             shape = ifelse(modulation_summary$Region == "Ant. Hipp", 21,
+                            ifelse(modulation_summary$Region == "Post. Hipp", 23, 24)),
+             size = 4, stroke = 1.5, color = "black") +
+  scale_fill_identity() +
+  labs(x = NULL, y = "Ripple rate selectivity index",
+       title = "RR modulation of ripple rate") +
+  theme_light(base_size = 14) +
+  theme(panel.background = element_rect(fill = "white", color = "white"),
+        plot.background = element_rect(fill = "white", color = "white"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_y_reverse(limits = c(-.5, .6))
+plot_diff_APamy_mod_NREM
+
+# ============================================================================
+# PLOT 3: RR modulation of ripple rate - WAKE ONLY - SUPPLEMENT
+# ============================================================================
+
+plot_diff_APamy_mod_Wake <- ggplot() +
+  geom_hline(yintercept = 0, linetype = "dotted", color = "black", linewidth = 0.8) +
+  geom_line(data = modulation_diff_df_filtered,
+            aes(x = Region, y = diff_mod_Wake, group = sub_num),
+            color = "gray70", linewidth = 0.7, alpha = 0.3) +
+  geom_jitter(data = modulation_diff_df_filtered,
+              aes(x = Region, y = diff_mod_Wake, fill = line_color),
+              shape = ifelse(modulation_diff_df_filtered$Region == "Ant. Hipp", 21,
+                             ifelse(modulation_diff_df_filtered$Region == "Post. Hipp", 23, 24)),
+              size = 4, alpha = 0.3, width = 0, stroke = .2, show.legend = FALSE) +
+  geom_errorbar(data = modulation_summary,
+                aes(x = Region,
+                    ymin = mean_diff_mod_W - sem_diff_mod_W,
+                    ymax = mean_diff_mod_W + sem_diff_mod_W),
+                width = 0.15, color = "black", size = 1) +
+  geom_point(data = modulation_summary,
+             aes(x = Region, y = mean_diff_mod_W, fill = line_color),
+             shape = ifelse(modulation_summary$Region == "Ant. Hipp", 21,
+                            ifelse(modulation_summary$Region == "Post. Hipp", 23, 24)),
+             size = 4, stroke = 1.5, color = "black") +
+  scale_fill_identity() +
+  labs(x = NULL, y = "Ripple rate selectivity index",
+       title = "RR modulation of ripple rate") +
+  theme_light(base_size = 14) +
+  theme(panel.background = element_rect(fill = "white", color = "white"),
+        plot.background = element_rect(fill = "white", color = "white"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_y_reverse(limits = c(-.5, .6))
+plot_diff_APamy_mod_Wake
+
+
+
 
