@@ -1,9 +1,9 @@
 # ============================================================================
-# Pupil Sextile Analysis: Ripple Rate Modulation by Pupil Size
+# Pupil Sextile Analysis: Ripple rate modulation by pupil size
 # ============================================================================
 # Analysis of ripple activity across pupil size sextiles in eyes-open periods
-# Including EOEC, main pupil analyses, blink analyses, and modulation indices
-# Last updated: April 2026, June 2026
+# Including EOEC, main pupil analyses, modulation indices.
+# Last updated: April 2026, June 2026, ES
 # ============================================================================
 
 # ============================================================================
@@ -28,7 +28,8 @@ library(tidyr)
 # ============================================================================
 
 # Load main pupil array with all physiological data
-pupil_array <- read_csv("data/pupil_array_1_3.csv", col_names = FALSE)
+# will have to download data into a folder since file too large to host on github. See readme for Box link to data.
+pupil_array <- read_csv("/Users/esiefert/Library/CloudStorage/Box-Box/Ripple_state_paper/data_for_github/pupil_array_1_3.csv", col_names = FALSE)
 colnames(pupil_array) <- c(
   "sub_num", "emublock", "matblock", "pup_time", 
   "raw_pup", "raw_sextile", "trial_num", 
@@ -37,7 +38,7 @@ colnames(pupil_array) <- c(
   "hipp_or_amy", "A_or_P", "keep_or_rej", "duration", "amplitude", "freq",
   "ripple_time", "ripple_idx", "z_pup", "z_sextile", "blink", "eye")
 
-# Remove subject 56 (only amygdala contacts that cannot be reliably kept)
+# Remove subject 56 (only amygdala contacts - only keeping participants with hippocampal contacts)
 pupil_array <- pupil_array %>%
   filter(sub_num != 56)
 
@@ -47,7 +48,7 @@ pupil_array <- pupil_array %>% select(-hipp_or_amy)
 # Filter array for the eye to use for each subject (one eye per subject)
 pupil_array_filter <- pupil_array %>%
   filter(case_when(
-    sub_num %in% c(38, 48, 53, 54, 58, 69) ~ eye == 0,
+    sub_num %in% c(38, 48, 53, 54, 58, 69) ~ eye == 0, #using right eye by default except for a few participants where angle was significantly better on left eye
     TRUE ~ eye == 1
   ))
 
@@ -57,15 +58,15 @@ pupil_array_filter2 <- pupil_array_filter %>%
          ripple_count = ifelse(keep_or_rej == 1, ripple_count, 0))
 
 # Load electrode position information
-sub_elec_positions <- read_csv("data/sub_elec_positions_allinfo_2025.csv", col_names = FALSE)
+sub_elec_positions <- read_csv("sub_elec_positions_allinfo_2025.csv", col_names = FALSE)
 colnames(sub_elec_positions) <- c(
   "sub_num", "electrode_num", "left_or_right", "hipp_or_amy", "AP", "RL", "SI", "AP_uncal", "apex_coord",
   "elec_coord", "coord_diff", "close_flag", "MNI_coord", "post_50", "post_35", "post_MNI",
   "overlap_50", "overlap_MNI", "overlap_35"
 )
 
-# Load sleep electrode information with modulation scores
-sleep_elecs <- read_csv("data/sleep_electrode_array_updated_final_9242025.csv", col_names = FALSE)
+# Load sleep electrode information
+sleep_elecs <- read_csv("sleep_electrode_array_updated_final_9242025.csv", col_names = FALSE)
 colnames(sleep_elecs) <- c(
   "sub_num", "electrode_num", "keep_or_reject", "hipp_or_amy", "sleep_mod_score", 
   "sleep_amp_score", "sleep_dur_score", "sleep_freq_score"
@@ -77,23 +78,23 @@ pupil_array_final <- pupil_array_filter2 %>%
               select(sub_num, electrode_num, hipp_or_amy, left_or_right, AP, AP_uncal), 
             by = c("sub_num", "electrode_num"))
 
-# Join sleep electrode information (including modulation scores)
+# Join sleep electrode information 
 pupil_array_final <- pupil_array_final %>%
   left_join(sleep_elecs %>%
               select(sub_num, electrode_num, sleep_mod_score, keep_or_reject), 
             by = c("sub_num", "electrode_num"))
 
-# Select only good electrodes (keep_or_reject == 0 or NA)
+# Select only good electrodes (keep_or_reject == 0)
 pupil_array_final <- filter(pupil_array_final, keep_or_reject == 0 | is.na(keep_or_reject))
 
-# Remove specific electrodes that were removed from sleep analysis
+# Remove specific electrodes that were removed from sleep analysis due to large artifacts throughout the recordings
 pupil_array_final <- pupil_array_final %>%
   filter(!(sub_num == 49 & electrode_num == 38)) %>%
   filter(!(sub_num == 62 & electrode_num == 134))
 
-# Check for artifactual ripples (amplitude >= 300 microvolts)
+# Check for artifactual ripples (amplitude >= 300 microvolts).
 bad_ripple <- pupil_array_final %>% 
-  filter(amplitude >= 300)
+  filter(amplitude >= 300) #there are none, so none to remove
 
 # Create dataset subsets
 # Main clean dataset: all good trials
@@ -119,7 +120,7 @@ unique_emublocks_trials <- pupil_array_EO_clean %>%
   group_by(sub_num) %>%
   summarise(n_trials = sum(n_unique_trials), .groups = "drop")
 
-# Summary statistics
+# Summary statistics on data block numbers and eyes open time
 median(unique_emublocks$n_unique_emublocks)
 quantile(unique_emublocks$n_unique_emublocks, 0.25)  # Q1
 quantile(unique_emublocks$n_unique_emublocks, 0.75)  # Q3
@@ -130,8 +131,8 @@ mean_rows_per_sub_num <- pupil_array_EO_clean %>%
   mutate(mean_duration_sec = n_rows / 200) %>%
   mutate(mean_duration_min = mean_duration_sec / 60)
 
-mean(mean_rows_per_sub_num$mean_duration_sec) / 60
-sd(mean_rows_per_sub_num$mean_duration_sec) / 60
+mean(mean_rows_per_sub_num$mean_duration_sec) / 60 #converting to minutes
+sd(mean_rows_per_sub_num$mean_duration_sec) / 60 #converting to minutes
 
 # ============================================================================
 # 3. EOEC ANALYSES: Eyes-Open vs Eyes-Closed Comparison
@@ -188,7 +189,7 @@ long_data_rateEOEC <- ripple_rate_finalEOEC %>%
   select(sub_num, EOEC, electrode_num, hipp_or_amy, AP_uncal, total_events, ripple_rate) %>%
   filter(!is.nan(EOEC))
 
-# Relabel subject numbers (42 -> 49 for consistency)
+# Relabel subject numbers (42 -> 49 for consistency; these are two separate implants of the same participant. Non-overlapping electrodes. Relabeling as one participant for nested models)
 long_data_rateEOEC$sub_num[long_data_rateEOEC$sub_num == 42] <- 49
 
 # Calculate subject and aggregate averages
@@ -211,7 +212,7 @@ hipp_subjectEOEC <- subject_avg_dataEOEC %>% filter(hipp_or_amy == 1)
 amy_aggEOEC <- agg_data_simpleEOEC %>% filter(hipp_or_amy == 2)
 amy_subjectEOEC <- subject_avg_dataEOEC %>% filter(hipp_or_amy == 2)
 
-# Create A/P/Amy variable
+# Create A/P/Amy variable (could create an integrate into above array, but leaving separate for now)
 long_data_rate_APEOEC <- long_data_rateEOEC %>%
   mutate(A_or_P_or_amy = ifelse(hipp_or_amy == 2, 3, 
                                 ifelse(AP_uncal == 0, 0, 1)))
@@ -298,11 +299,12 @@ rate2
 
 # Mixed effects model: EOEC effect on hippocampal ripple rate
 long_data_rateEOEC_hipp <- long_data_rateEOEC %>% filter(hipp_or_amy == 1)
+long_data_rateEOEC_hipp$EOEC <- as.factor(long_data_rateEOEC_hipp$EOEC) #make sure reading in as factor
 model.pup1 <- lmer(ripple_rate ~ EOEC + (1 | sub_num/electrode_num), data = long_data_rateEOEC_hipp)
 summary(model.pup1)
-car::Anova(model.pup1, type = 'III')
+car::Anova(model.pup1, type = 'III') #p = 0.06553
 
-pp <- plot(ggpredict(model.pup1, terms = c('EOEC'))) +
+pp <- plot(ggpredict(model.pup1, terms = c('EOEC'))) + #plot to visualize effect
   theme_minimal(base_size = 14) +
   theme(panel.background = element_rect(fill = "white"),
         plot.background = element_rect(fill = "white"))
@@ -338,7 +340,7 @@ ripple_sextile_counts <- pupil_array_EO_clean %>%
 ripple_sextile_counts <- ripple_sextile_counts %>% filter(electrode_num != 0)
 ripple_sextile_counts <- ripple_sextile_counts[complete.cases(ripple_sextile_counts), ]
 
-# Add region and modulation information
+# Add region information
 ripple_sextile_counts <- ripple_sextile_counts %>%
   left_join(sleep_elecs %>%
               select(sub_num, electrode_num, hipp_or_amy, sleep_mod_score), 
@@ -382,11 +384,6 @@ modulation_diff_df_elec <- modulation_df_elec %>%
                   mean(mean_ripple_rate[z_sextile %in% c(5, 6)])) / 
                (mean(mean_ripple_rate[z_sextile %in% c(1, 2)]) +
                 mean(mean_ripple_rate[z_sextile %in% c(5, 6)])),
-    
-    diff_mod_less = (mean(mean_ripple_rate[z_sextile %in% c(1)]) -
-                      mean(mean_ripple_rate[z_sextile %in% c(6)])) / 
-                    (mean(mean_ripple_rate[z_sextile %in% c(1)]) +
-                     mean(mean_ripple_rate[z_sextile %in% c(6)])),
     AP_uncal = AP_uncal[1],
     hipp_or_amy = hipp_or_amy[1],
     AP = AP[1],
@@ -399,10 +396,10 @@ modulation_diff_df_elec <- modulation_df_elec %>%
 # Model AP effect on modulation
 modulation_diff_df_elec_hipp <- modulation_diff_df_elec %>%
   filter(hipp_or_amy == 1)
-modulation_diff_df_elec_hipp$sub_num[modulation_diff_df_elec_hipp$sub_num == 42] <- 49
+modulation_diff_df_elec_hipp$sub_num[modulation_diff_df_elec_hipp$sub_num == 42] <- 49 #make sure these are matched. Two separate implants for same participant. Non-overlapping electrodes. Assign same participant number for nested model.
 
 model.pup1 <- lmer(diff_mod ~ AP + (1 | sub_num), data = modulation_diff_df_elec_hipp)
-summary(model.pup1)
+summary(model.pup1) #this is not significant. It makes sense, if you look at the visualization of sextiles 1 and 2 and 5 and 6 and imagine mean comparisons. However, when considering full range of sextiles, effect comes out... see below mixed effects models.
 # 4.3 Data Preparation for Main Pupil Plots
 # ----
 
@@ -415,7 +412,7 @@ pink_colors <- c(
   rgb(187, 89, 160, maxColorValue = 255),    # orange
   rgb(213, 123, 178, maxColorValue = 255),    # purple
   rgb(227, 161, 199, maxColorValue = 255)     # teal
-)
+)#posterior hippocampus
 
 orange_colors <- c(
   rgb(110, 14, 16, maxColorValue = 255),      # red
@@ -424,7 +421,7 @@ orange_colors <- c(
   rgb(213, 92, 39, maxColorValue = 255),    # orange
   rgb(236, 128, 53, maxColorValue = 255),    # purple
   rgb(249, 163, 95, maxColorValue = 255)     # teal
-)
+)#amygdala
 
 blue_purple <- c(
   rgb(19, 27, 71, maxColorValue = 255),      # red
@@ -433,7 +430,7 @@ blue_purple <- c(
   rgb(100, 113, 176, maxColorValue = 255),    # orange
   rgb(135, 146, 201, maxColorValue = 255),    # purple
   rgb(173, 179, 218, maxColorValue = 255)     # teal
-)
+) #hippocampus
 
 purple_colors2 <- c(
   rgb(36, 16, 65, maxColorValue = 255),      # red
@@ -442,7 +439,9 @@ purple_colors2 <- c(
   rgb(121, 95, 151, maxColorValue = 255),    # orange
   rgb(155, 128, 187, maxColorValue = 255),    # purple
   rgb(191, 163, 206, maxColorValue = 255)     # teal
-)
+) #anterior hippocampus
+
+long_data_rate$sub_num[long_data_rate$sub_num == 42] <- 49 #update so that these two implants have same participant number. Same participant, different implants, non-overlapping electrodes. Use same participant number for nested models and plots.
 
 # Calculate subject averages
 subject_avg_data <- long_data_rate %>%
@@ -468,7 +467,7 @@ amy_subject <- subject_avg_data %>% filter(hipp_or_amy == 2)
 
 # Create A/P/Amy variable
 long_data_rate_AP <- long_data_rate %>%
-  mutate(A_or_P_or_amy = ifelse(hipp_or_amy == 2, 3, 
+  mutate(A_or_P_or_amy = ifelse(hipp_or_amy == 2, 2, 
                                 ifelse(AP_uncal == 0, 0, 1)))
 
 long_data_rate_hipp <- long_data_rate_AP %>% filter(hipp_or_amy == 1)
@@ -603,18 +602,13 @@ plot_all_sextiles_AP
 long_data_rate_hipp <- long_data_rate_AP %>% filter(hipp_or_amy == 1)
 model.pup1 <- lmer(ripple_rate ~ z_sextile * AP_uncal + (1 | sub_num/electrode_num), 
                    data = long_data_rate_hipp)
-summary(model.pup1)
-test(emmeans(model.pup1, ~ z_sextile, at = list(z_sextile = c(1, 6))))
+summary(model.pup1) #full hippocampus is z_sextile
+test(emmeans(model.pup1, ~ z_sextile, at = list(z_sextile = c(1, 6)))) #full hipp
 test(emtrends(model.pup1, ~ AP_uncal, var = "z_sextile")) #anterior and posterior
+emtrends(model.pup1, pairwise ~ AP_uncal, var = "z_sextile") #anterior and posterior
+test(emmeans(model.pup1, ~ z_sextile | AP_uncal, at = list(z_sextile = c(1, 6)))) #anterior and posterior
 
-emtrends(model.pup1, pairwise ~ AP_uncal, var = "z_sextile")
-
-test(emmeans(model.pup1, ~ z_sextile | AP_uncal, at = list(z_sextile = c(1, 6))))
-#test(emmeans(model.pup1, ~ AP_uncal | z_sextile, at = list(z_sextile = c(1, 6))))
-#emm <- emmeans(model.pup1, ~ z_sextile * AP_uncal, at = list(z_sextile = c(1, 6)))
-#pairs(emm, by = "z_sextile")
-
-pp <- plot(ggpredict(model.pup1, terms = c('z_sextile', 'AP_uncal'))) +
+pp <- plot(ggpredict(model.pup1, terms = c('z_sextile', 'AP_uncal'))) + #plot model effect
   theme_minimal(base_size = 14) +
   theme(panel.background = element_rect(fill = "white"),
         plot.background = element_rect(fill = "white"))
@@ -625,17 +619,15 @@ pp
 model.pup1 <- lmer(ripple_rate ~ z_sextile * hipp_or_amy + (1 | sub_num/electrode_num), 
                    data = long_data_rate_AP)
 summary(model.pup1)
-pp <- plot(ggpredict(model.pup1, terms = c('z_sextile', 'hipp_or_amy'))) +
+pp <- plot(ggpredict(model.pup1, terms = c('z_sextile', 'hipp_or_amy'))) + #plot model, 1 = hipp, 2 = amy
   theme_minimal(base_size = 14) +
   theme(panel.background = element_rect(fill = "white"),
         plot.background = element_rect(fill = "white"))
 pp
-
 test(emtrends(model.pup1, ~ hipp_or_amy, var = "z_sextile"))
 emtrends(model.pup1, pairwise ~ hipp_or_amy, var = "z_sextile")
 
 # Model with calibrated AP values
-
 #insert continuous AP then run model
 long_data_rate_hipp <- long_data_rate_hipp %>%
   left_join(sub_elec_positions %>%
@@ -644,7 +636,7 @@ long_data_rate_hipp <- long_data_rate_hipp %>%
 
 model.pup1 <- lmer(ripple_rate ~ z_sextile * AP + (1 | sub_num/electrode_num), 
                    data = long_data_rate_hipp)
-summary(model.pup1)
+summary(model.pup1) #examine interaction of pupil sextile and AP continuous position
 
 # ============================================================================
 # 6. MOD SCORE ANALYSIS: Sleep Modulation Index by Pupil State
@@ -669,25 +661,20 @@ modulation_diff_df <- modulation_df %>%
                   mean(mean_ripple_rate[z_sextile %in% c(5, 6)])) / 
                (mean(mean_ripple_rate[z_sextile %in% c(1, 2)]) +
                 mean(mean_ripple_rate[z_sextile %in% c(5, 6)])),
-    
-    diff_mod_simple = (mean(mean_ripple_rate[z_sextile %in% c(1)]) -
-                        mean(mean_ripple_rate[z_sextile %in% c(6)])) / 
-                      (mean(mean_ripple_rate[z_sextile %in% c(1)]) +
-                       mean(mean_ripple_rate[z_sextile %in% c(6)])),
     AP = AP[1],
     .groups = "drop"
   )
 
 modulation_diff_df_filtered <- modulation_diff_df %>%
-  filter(A_or_P_or_amy %in% c(0, 1, 3)) %>%
+  filter(A_or_P_or_amy %in% c(0, 1, 2)) %>%
   mutate(
     Region = factor(A_or_P_or_amy,
-                    levels = c(0, 1, 3),
+                    levels = c(0, 1, 2),
                     labels = c("Ant. Hipp", "Post. Hipp", "Amyg.")),
     line_color = case_when(
       A_or_P_or_amy == 0 ~ "#9a81bb",  # Ant Hipp
       A_or_P_or_amy == 1 ~ "#d57bb2",  # Post Hipp
-      A_or_P_or_amy == 3 ~ "#ec8035"   # Amyg
+      A_or_P_or_amy == 2 ~ "#ec8035"   # Amyg
     )
   )
 
@@ -699,9 +686,6 @@ modulation_summary <- modulation_diff_df_filtered %>%
   summarise(
     mean_diff_mod = mean(diff_mod, na.rm = TRUE),
     sem_diff_mod = sd(diff_mod, na.rm = TRUE) / sqrt(n()),
-    
-    mean_diff_modS = mean(diff_mod_simple, na.rm = TRUE),
-    sem_diff_modS = sd(diff_mod_simple, na.rm = TRUE) / sqrt(n()),
     AP = AP[1],
     .groups = "drop"
   )
@@ -770,4 +754,4 @@ plot_diff_APamy_mod <- ggplot() +
   ) + 
   ylim(-0.5, 1)
 
-plot_diff_APamy_mod
+plot_diff_APamy_mod #mod score plot

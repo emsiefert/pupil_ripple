@@ -16,7 +16,7 @@ Data used:
 Data used:
 - *stage_table_9242025.csv* (stage duration data)
 
-**pupil_sextiles_final_CLEANED.R**: creates main figures and mixed-effects models for pupil-ripple rate analyses. 
+**pupil_sextiles_final_CLEAN.R**: creates main figures and mixed-effects models for pupil-ripple rate analyses. 
 Data used:
 - *pupil_array_1_3.csv* (main data) IMPORTANT: this file is too big to be held on github. Instead, access it here: https://upenn.box.com/s/elos3yeyvylnk7q4g67iglb8caugmdd5
 - *sub_elec_positions_allinfo_2025.csv* (electrode information)
